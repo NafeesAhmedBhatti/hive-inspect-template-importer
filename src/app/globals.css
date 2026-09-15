@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+/* Sanitized rich-content preview inside the editor */
+.rich-preview {
+  @apply text-sm leading-relaxed text-slate-700;
+}
+.rich-preview a {
+  @apply text-amber-700 underline decoration-amber-400 underline-offset-2 hover:text-amber-800;
+}
+.rich-preview p {
+  @apply my-1;
+}
+.rich-preview ul,
+.rich-preview ol {
+  @apply my-1 list-disc pl-5;
+}
+.rich-preview strong,
+.rich-preview b {
+  @apply font-semibold text-slate-900;
+}
+.rich-preview img {
+  @apply my-1 inline-block max-w-full rounded border border-slate-200;
+}
+
+/* Compact B2B table-ish density helpers */
+.label-xs {
+  @apply text-[11px] font-semibold uppercase tracking-wide text-slate-400;
+}
