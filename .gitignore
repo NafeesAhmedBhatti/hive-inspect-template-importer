@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+
+# env — NEVER commit. Env values are managed outside the repo (.env.example documents them).
+.env
+.env.*
+!.env.example
+
+# local postgres data dir (embedded dev database)
+.pgdata/
+
+# one-shot npm-install sentinel written by the web bootstrap service
+.deps-done
+
+# one-shot npm-install sentinel written by the web bootstrap service
+.deps-done
+
+# builds / caches
+*.tsbuildinfo
+coverage/
+.vitest/
+
+# misc
+.DS_Store
+npm-debug.log*
+prisma/_quarantine_migrations/
