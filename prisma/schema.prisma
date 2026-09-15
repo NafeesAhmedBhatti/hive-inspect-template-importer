@@ -1,0 +1,79 @@
+// Hive Inspect — Template Importer · database schema
+// PostgreSQL from day one (production: Supabase; dev: embedded Postgres in this container).
+// See /workspace/.drytis/schema.md for design rationale.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Supabase: non-pooled connection for migrations (falls back to DATABASE_URL locally)
+}
+
+model Template {
+  id             String   @id @default(cuid())
+  name           String
+  /// Provenance: "spectora_html_text" | "duplicate_of:<id>" | "synthetic_seed"
+  source         String   @default("spectora_html_text")
+  /// Original .xlsx filename when imported from a file
+  sourceFileName String?
+  /// Audit snapshot at import time: counts, warnings digest, preservation report
+  importSummary  Json?
+  /// True ONLY for clearly-labeled synthetic/demo seeds — never for real imports
+  isSynthetic    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sections Section[]
+
+  @@map("templates")
+}
+
+model Section {
+  id         String   @id @default(cuid())
+  templateId String
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name       String
+  position   Int
+
+  items Item[]
+
+  @@index([templateId, position])
+  @@map("sections")
+}
+
+model Item {
+  id        String  @id @default(cuid())
+  sectionId String
+  section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  name      String
+  position  Int
+
+  comments Comment[]
+
+  @@index([sectionId, position])
+  @@map("items")
+}
+
+model Comment {
+  id       String  @id @default(cuid())
+  itemId   String
+  item     Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  /// Comment Name from the export (nullable — some rows have text only)
+  name     String?
+  /// Comment Text verbatim from the HTML-text export (raw HTML preserved; sanitized at render)
+  text     String
+  /// info | limit | defect | unknown
+  type     String  @default("info")
+  /// Spectora severity: -1 low | 0 med | 1 high
+  category Int?
+  position Int
+  /// Every other populated Spectora column, verbatim (key = canonical column name).
+  /// Nothing from the source file is ever silently dropped.
+  extra    Json?
+
+  @@index([itemId, position])
+  @@map("comments")
+}
