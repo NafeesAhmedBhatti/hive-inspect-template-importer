@@ -15,8 +15,8 @@ production, Supabase is the intended database.
 
 | Variable | Value | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | pooled string, `?pgbouncer=true&connection_limit=1` | runtime queries |
-| `DIRECT_URL` | direct string | used by `directUrl`; migrations |
+| `DATABASE_URL` | **transaction pooler** string, port `6543`, with `?pgbouncer=true&connection_limit=5&pool_timeout=30` | runtime queries. **Do NOT use `connection_limit=1`** — it times out under Vercel's concurrent serverless requests ("Timed out fetching a new connection from the connection pool"). 3–5 is the sweet spot on the free plan. |
+| `DIRECT_URL` | direct string: `db.<project-ref>.supabase.co:5432` | used by `directUrl`; migrations. **Free-plan gotcha:** this host is IPv6-only — run `npx prisma migrate deploy` from an IPv6-capable network, or enable Supabase's **IPv4 add-on** (Project Settings → Add-ons). |
 
 Both are documented in `.env.example`. Never commit real credentials.
 
