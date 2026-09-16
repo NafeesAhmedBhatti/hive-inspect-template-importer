@@ -1,5 +1,7 @@
 // Hive Inspect — Template Importer · database schema
 // PostgreSQL from day one (production: Supabase; dev: embedded Postgres in this container).
+// Column names are snake_case in the database (via @map) to match the committed
+// migration SQL exactly — see prisma/migrations/20260915160000_init.
 // See /workspace/.drytis/schema.md for design rationale.
 
 generator client {
@@ -18,13 +20,13 @@ model Template {
   /// Provenance: "spectora_html_text" | "duplicate_of:<id>" | "synthetic_seed"
   source         String   @default("spectora_html_text")
   /// Original .xlsx filename when imported from a file
-  sourceFileName String?
+  sourceFileName String?  @map("source_file_name")
   /// Audit snapshot at import time: counts, warnings digest, preservation report
-  importSummary  Json?
+  importSummary  Json?    @map("import_summary")
   /// True ONLY for clearly-labeled synthetic/demo seeds — never for real imports
-  isSynthetic    Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  isSynthetic    Boolean  @default(false) @map("is_synthetic")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   sections Section[]
 
@@ -32,8 +34,8 @@ model Template {
 }
 
 model Section {
-  id         String   @id @default(cuid())
-  templateId String
+  id         String @id @default(cuid())
+  templateId String @map("template_id")
   template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
   name       String
   position   Int
@@ -45,8 +47,8 @@ model Section {
 }
 
 model Item {
-  id        String  @id @default(cuid())
-  sectionId String
+  id        String @id @default(cuid())
+  sectionId String @map("section_id")
   section   Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
   name      String
   position  Int
@@ -59,7 +61,7 @@ model Item {
 
 model Comment {
   id       String  @id @default(cuid())
-  itemId   String
+  itemId   String  @map("item_id")
   item     Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
   /// Comment Name from the export (nullable — some rows have text only)
   name     String?
