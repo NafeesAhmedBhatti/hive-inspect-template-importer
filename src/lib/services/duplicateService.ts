@@ -34,51 +34,61 @@ export async function duplicateTemplate(
   const name = (opts?.name ?? `${source.name} (copy)`).trim() || `${source.name} (copy)`;
 
   try {
-    return await prisma.$transaction(async (tx) => {
-      const summary = (source.importSummary as Record<string, unknown> | null) ?? {};
-      const copySummary = {
-        ...summary,
-        duplicatedFrom: source.id,
-        duplicatedFromName: source.name,
-        duplicatedAt: new Date().toISOString(),
-      };
+    // Serverless DBs (Supabase transaction pooler) cannot hold one connection
+    // for ~480 sequential INSERTs — the single-transaction version died at the
+    // 60s pool ceiling. CHUNKED strategy with compensating delete: create the
+    // copy template row, then one short transaction per section (items +
+    // batched comments). Any chunk failure deletes the partial copy.
+    const summary = (source.importSummary as Record<string, unknown> | null) ?? {};
+    const copySummary = {
+      ...summary,
+      duplicatedFrom: source.id,
+      duplicatedFromName: source.name,
+      duplicatedAt: new Date().toISOString(),
+    };
 
-      const copy = await tx.template.create({
-        data: {
-          name,
-          source: `duplicate_of:${source.id}`,
-          sourceFileName: null, // the copy was not produced by a file import
-          isSynthetic: source.isSynthetic, // a synthetic sample stays labeled
-          importSummary: copySummary,
-        },
-      });
+    const copy = await prisma.template.create({
+      data: {
+        name,
+        source: `duplicate_of:${source.id}`,
+        sourceFileName: null, // the copy was not produced by a file import
+        isSynthetic: source.isSynthetic, // a synthetic sample stays labeled
+        importSummary: copySummary,
+      },
+    });
 
+    try {
       for (const section of source.sections) {
-        const sectionCopy = await tx.section.create({
-          data: { templateId: copy.id, name: section.name, position: section.position },
-        });
-        for (const item of section.items) {
-          const itemCopy = await tx.item.create({
-            data: { sectionId: sectionCopy.id, name: item.name, position: item.position },
+        await prisma.$transaction(async (tx) => {
+          const sectionCopy = await tx.section.create({
+            data: { templateId: copy.id, name: section.name, position: section.position },
           });
-          for (const comment of item.comments) {
-            await tx.comment.create({
-              data: {
-                itemId: itemCopy.id,
-                name: comment.name,
-                text: comment.text,
-                type: comment.type,
-                category: comment.category,
-                position: comment.position,
-                extra: comment.extra ?? undefined, // verbatim, new row
-              },
+          for (const item of section.items) {
+            const itemCopy = await tx.item.create({
+              data: { sectionId: sectionCopy.id, name: item.name, position: item.position },
             });
+            const rows = item.comments.map((comment) => ({
+              itemId: itemCopy.id,
+              name: comment.name,
+              text: comment.text,
+              type: comment.type,
+              category: comment.category,
+              position: comment.position,
+              extra: comment.extra ?? undefined, // verbatim, new row
+            }));
+            if (rows.length > 0) {
+              await tx.comment.createMany({ data: rows });
+            }
           }
-        }
+        }, { maxWait: 10_000, timeout: 55_000 });
       }
+    } catch (chunkError) {
+      // Compensating delete: never leave a partial copy behind.
+      await prisma.template.delete({ where: { id: copy.id } }).catch(() => {});
+      throw chunkError;
+    }
 
-      return { id: copy.id, name: copy.name };
-    }, { maxWait: 10_000, timeout: 60_000 }); // serverless pooler: many round-trips per copy
+    return { id: copy.id, name: copy.name };
   } catch (e) {
     if (e instanceof DuplicateError) throw e;
     throw new DuplicateError('DUPLICATE_FAILED', `Could not duplicate the template: ${e instanceof Error ? e.message : 'unknown error'} — nothing was committed.`);
