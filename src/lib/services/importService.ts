@@ -43,67 +43,81 @@ export async function persistTemplate(input: PersistInput): Promise<{ id: string
   }
 
   try {
-    // Serverless DBs (Supabase transaction pooler via PgBouncer) need a longer
-    // interactive-transaction window: ~480 sequential INSERTs for a real
-    // InterNACHI export at ~200ms+ round-trip each. 60s (default 5s) covers it
-    // within Vercel's function limits; maxWait guards pool acquisition.
-    return await prisma.$transaction(
-      async (tx) => {
-      const created = await tx.template.create({
-        data: {
-          name,
-          source: input.source ?? template.source ?? 'spectora_html_text',
-          sourceFileName: template.sourceFileName ?? null,
-          isSynthetic: input.isSynthetic ?? false,
-          importSummary: {
-            importedAt: new Date().toISOString(),
-            totals: report.totals,
-            columns: report.columns,
-            unknownColumns: report.unknownColumns,
-            warningCount: warnings.length,
-            warnings: warnings.slice(0, 200), // audit snapshot; pathological files are capped
-          } as unknown as Prisma.InputJsonValue,
-        },
-      });
+    // Serverless DBs (Supabase transaction pooler via PgBouncer) cannot hold a
+    // single connection for the whole write: a real InterNACHI export is ~480
+    // sequential INSERTs, which exceeds the 60s pool ceiling. Strategy:
+    // CHUNKED commits with a compensating delete — create the template row
+    // first, then batch items+comments per section in one transaction each.
+    // Any chunk failure (or failure before the first chunk) deletes the
+    // partial template — all-or-nothing semantics preserved, minus the
+    // long-lived single connection.
+    const created = await prisma.template.create({
+      data: {
+        name,
+        source: input.source ?? template.source ?? 'spectora_html_text',
+        sourceFileName: template.sourceFileName ?? null,
+        isSynthetic: input.isSynthetic ?? false,
+        importSummary: {
+          importedAt: new Date().toISOString(),
+          totals: report.totals,
+          columns: report.columns,
+          unknownColumns: report.unknownColumns,
+          warningCount: warnings.length,
+          warnings: warnings.slice(0, 200), // audit snapshot; pathological files are capped
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
 
+    try {
       for (const section of template.sections) {
-        const createdSection = await tx.section.create({
-          data: {
-            templateId: created.id,
-            name: section.name,
-            position: section.position,
-          },
-        });
-        for (const item of section.items) {
-          const createdItem = await tx.item.create({
-            data: {
-              sectionId: createdSection.id,
-              name: item.name,
-              position: item.position,
-            },
-          });
-          // Comments with no position need one — the parser always assigns
-          // encounter-order positions, but guard against hand-built IR.
-          let autoPosition = 0;
-          for (const comment of item.comments) {
-            await tx.comment.create({
+        // One short transaction per section (items + comments batch-inserted).
+        await prisma.$transaction(
+          async (tx) => {
+            const createdSection = await tx.section.create({
               data: {
+                templateId: created.id,
+                name: section.name,
+                position: section.position,
+              },
+            });
+            for (const item of section.items) {
+              const createdItem = await tx.item.create({
+                data: {
+                  sectionId: createdSection.id,
+                  name: item.name,
+                  position: item.position,
+                },
+              });
+              // Comments with no position need one — the parser always assigns
+              // encounter-order positions, but guard against hand-built IR.
+              let autoPosition = 0;
+              const rows = item.comments.map((comment) => ({
                 itemId: createdItem.id,
                 name: comment.name,
                 text: comment.text,
                 type: comment.type,
                 category: comment.category,
-                position: comment.position ?? autoPosition,
-                extra: comment.extra && Object.keys(comment.extra).length > 0 ? comment.extra : undefined,
-              },
-            });
-            autoPosition++;
-          }
-        }
+                position: comment.position ?? autoPosition++,
+                extra:
+                  comment.extra && Object.keys(comment.extra).length > 0
+                    ? (comment.extra as Prisma.InputJsonValue)
+                    : Prisma.DbNull,
+              }));
+              if (rows.length > 0) {
+                await tx.comment.createMany({ data: rows });
+              }
+            }
+          },
+          { maxWait: 10_000, timeout: 55_000 }
+        );
       }
+    } catch (chunkError) {
+      // Compensating delete: never leave a partial template behind.
+      await prisma.template.delete({ where: { id: created.id } }).catch(() => {});
+      throw chunkError;
+    }
 
-      return { id: created.id, name: created.name };
-    }, { maxWait: 10_000, timeout: 60_000 });
+    return { id: created.id, name: created.name };
   } catch (e) {
     if (e instanceof ImportServiceError) throw e;
     throw new ImportServiceError(

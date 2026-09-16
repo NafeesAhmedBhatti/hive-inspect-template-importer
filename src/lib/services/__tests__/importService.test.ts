@@ -77,18 +77,18 @@ describe('importService.persistTemplate', () => {
     expect(summary.totals.comments).toBe(parsed.report.totals.comments);
   });
 
-  it('rolls back completely when persistence fails midway', async () => {
+  it('leaves nothing behind when persistence fails midway (compensating delete across chunks)', async () => {
     const parsed = runImportParse('rollback-test.xlsx', buildWorkbookBytes(FIXTURE_ROWS), {
       templateName: 'Rollback test',
     });
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
 
-    // Sabotage: a comment whose itemId will violate a FK mid-transaction by
-    // injecting a null-required field — simplest reliable failure is an
-    // invalid section reference after creation has started. We simulate by
-    // breaking an item name to null (NOT NULL violation) on the LAST section,
-    // after earlier sections have already been created inside the transaction.
+    // Sabotage: break an item name to null (NOT NULL violation) on the LAST
+    // section. Persistence is chunked per section now (serverless pooler
+    // safety — see importService.ts), so earlier sections are already
+    // committed when the last chunk fails: the compensating delete must
+    // remove the partial template, preserving all-or-nothing semantics.
     const broken = structuredClone(parsed.template) as typeof parsed.template;
     broken.sections[broken.sections.length - 1].items[0].name = undefined as unknown as string;
 
@@ -97,7 +97,7 @@ describe('importService.persistTemplate', () => {
     ).rejects.toBeInstanceOf(ImportServiceError);
 
     const leftover = await prisma.template.findMany({ where: { name: 'Rollback test' } });
-    expect(leftover).toHaveLength(0); // nothing committed — full rollback
+    expect(leftover).toHaveLength(0); // compensating delete removed everything
   });
 
   it('rejects an empty template', async () => {
