@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 import type { ImportReport, ImportWarning, ParsedTemplate } from '@/lib/spectora/types';
 
 /**
@@ -56,7 +57,7 @@ export async function persistTemplate(input: PersistInput): Promise<{ id: string
             unknownColumns: report.unknownColumns,
             warningCount: warnings.length,
             warnings: warnings.slice(0, 200), // audit snapshot; pathological files are capped
-          },
+          } as unknown as Prisma.InputJsonValue,
         },
       });
 
