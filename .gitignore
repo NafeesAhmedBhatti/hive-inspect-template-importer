@@ -23,3 +23,6 @@ tsconfig.tsbuildinfo
 # misc
 .DS_Store
 npm-debug.log*
+
+# internal AI-workflow blueprints (workspace-only, not part of the submission)
+.drytis/
