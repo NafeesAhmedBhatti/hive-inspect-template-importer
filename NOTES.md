@@ -16,6 +16,12 @@ by Postgres crash recovery.
 was moved aside and Postgres re-initialized fresh. `rm -rf` fails on the
 corrupted files too — `mv` + recreate works.
 
+**Known leftover artifacts:** the same FS corruption left an undeletable
+`prisma/_quarantine_migrations/` directory and once blanked `.gitignore`
+(repaired and committed). Git only emits a warning for the untracked
+corrupted dir; `prisma migrate` is unaffected (it lists only
+`prisma/migrations/`). Leave such dirs in place — do not fight the FS.
+
 **Lesson:** treat `/workspace/.pgdata` as disposable dev state. Never store
 anything valuable only there; real data belongs in the configured production
 database (Supabase in this project's target topology).
