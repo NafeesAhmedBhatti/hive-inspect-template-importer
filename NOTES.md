@@ -195,3 +195,17 @@ asserting the source unchanged.
 shows a distinct "synthetic sample" provenance badge. Documentation and UI
 copy must never claim real-export validation until the checklist in
 `tests/import-real-file.md` has passed against the user's actual file.
+
+**Update (2026-09-16): the gate is now CLOSED.** The real export
+(`InterNACHI Residential`, Spectora free trial, stock InterNACHI content,
+no customer data) is committed at `samples/spectora/` and passed the full
+checklist through the live API: 13 sections / 69 items / 392 comments,
+zero unknown columns, types (info 78 / defect 302 / limit 12) and categories
+(0→281, 1→21) mapped first-class, 69 items ordered via `Order (w/i item)`,
+HTML preserved byte-for-byte, commit → tree → duplicate → delete verified.
+The validation caught one real parser gap — annotated headers
+(`Comment Type (info, limit, defect)`, `Category (-1: Low, 0: Med, 1: High)`)
+and the photo family extending to `Default Photo 10` were not in the
+doc-derived registry. Fixed via annotation-stripping header match +
+registry extension; locked in by
+`src/lib/spectora/__tests__/real-export-conformance.test.ts` (44/44 green).

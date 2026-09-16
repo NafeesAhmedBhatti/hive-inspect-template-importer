@@ -20,6 +20,17 @@ export const FIRST_CLASS_COLUMNS = [
   'Order (w/i item)',
 ] as const;
 
+/**
+ * Real Spectora exports annotate some headers with parenthetical hints
+ * (e.g. "Comment Type (info, limit, defect)", "Category (-1: Low, 0: Med, 1: High)").
+ * After normalizeHeader those still differ from the bare canonical name, so we
+ * also strip a trailing parenthetical before matching — but ONLY for first-class
+ * columns, never as a license to fuzzy-match arbitrary columns.
+ */
+export function stripHeaderAnnotation(normalized: string): string {
+  return normalized.replace(/\s*\([^)]*\)\s*$/, '').trim();
+}
+
 export const VERBATIM_COLUMNS = [
   'Multiple Choice Options',
   'Unit Type Options',
@@ -35,12 +46,9 @@ export const VERBATIM_COLUMNS = [
   'Simple Format',
   'Disable Photos',
   'Uses',
-  'Default Photo 1',
-  'Default Photo 1 Caption',
-  'Default Photo 2',
-  'Default Photo 2 Caption',
-  'Default Photo 3',
-  'Default Photo 3 Caption',
+  // Photo family: real exports carry up to 10 slots (docs mention 3).
+  ...Array.from({ length: 10 }, (_, i) => `Default Photo ${i + 1}`),
+  ...Array.from({ length: 10 }, (_, i) => `Default Photo ${i + 1} Caption`),
   'Last Modified',
 ] as const;
 
@@ -96,13 +104,19 @@ export function matchHeaders(
   const matches: HeaderMatch[] = [];
   const unknown: { raw: string; index: number }[] = [];
   headerRow.forEach((raw, index) => {
-    const norm = normalizeHeader(raw ?? '');
+    const trimmed = (raw ?? '').trim();
+    const norm = normalizeHeader(trimmed);
     if (norm === '') return; // trailing empty header cells are structural, not data
-    const canonical = canonicalByNorm.get(norm);
+    let canonical = canonicalByNorm.get(norm);
+    if (!canonical) {
+      // Real exports annotate headers ("Category (-1: Low, 0: Med, 1: High)").
+      // Strip one trailing parenthetical and retry — canonical names still win.
+      canonical = canonicalByNorm.get(stripHeaderAnnotation(norm));
+    }
     if (canonical) {
-      matches.push({ canonical, raw: raw.trim(), index });
+      matches.push({ canonical, raw: trimmed, index });
     } else {
-      unknown.push({ raw: raw.trim(), index });
+      unknown.push({ raw: trimmed, index });
     }
   });
   return { matches, unknown };

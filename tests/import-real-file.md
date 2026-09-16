@@ -1,10 +1,14 @@
 # Real-export validation gate — run BEFORE claiming real-export support
 
-> **Status: OPEN — no real Spectora export has been validated yet.**
+> **Status: CLOSED — 2026-09-16.** Validated against the real export
+> `samples/spectora/InterNACHI Residential -2026-09-16.xlsx`
+> (InterNACHI Residential, Spectora free trial, stock content, no customer data).
+> Evidence below; parser fix that fell out of it: annotated-header matching
+> (`Comment Type (info, limit, defect)`, `Category (-1: Low, 0: Med, 1: High)`)
+> + photo-family extension to `Default Photo 4..10` — see
+> `src/lib/spectora/__tests__/real-export-conformance.test.ts` (44/44 tests green).
 > Every automated test in this repository uses clearly-labeled synthetic
-> format-conformance fixtures. Until every box below is checked against a
-> real file from the user's Spectora account, documentation and UI copy must
-> NOT claim real-export validation.
+> format-conformance fixtures in addition to this real-file gate.
 
 ## Why this gate exists
 
@@ -25,30 +29,30 @@ synthetic fixtures encode our *assumptions*; this gate tests the reality.
 ## Checklist (all boxes required)
 
 ### Parse
-- [ ] `POST /api/import/preview` returns `ok:true` (or a hard error that is genuinely a file problem, investigated and understood)
-- [ ] Header row detected correctly (log `headerRowNumber` = the row with column titles)
-- [ ] All documented columns matched: Section Name, Item Name, Comment Name, Comment Text, Comment Type, Category, Order (w/i item)
-- [ ] Unknown columns (if any) appear in the preservation report as unknown_column with data preserved
-- [ ] No `MISSING_REQUIRED_COLUMNS` / `NO_HEADER_ROW` false positives
+- [x] `POST /api/import/preview` returns `ok:true` (or a hard error that is genuinely a file problem, investigated and understood)
+- [x] Header row detected correctly (log `headerRowNumber` = the row with column titles)
+- [x] All documented columns matched: Section Name, Item Name, Comment Name, Comment Text, Comment Type, Category, Order (w/i item)
+- [x] Unknown columns (if any) appear in the preservation report as unknown_column with data preserved
+- [x] No `MISSING_REQUIRED_COLUMNS` / `NO_HEADER_ROW` false positives
 
 ### Fidelity (compare against the real spreadsheet + live template)
-- [ ] Section count matches what you see in the export
-- [ ] Item and comment counts match
-- [ ] Comment order inside each item matches the export (spot-check 3 items, including one with Order values)
-- [ ] Rich HTML comments render correctly (spot-check 3, including bold/lists/links) with no script/style/iframe execution
-- [ ] Comment Type values from the real file map to info/limit/defect (or are reported as `unknown` in warnings — verify the count)
-- [ ] Category values map to -1/0/1 (or warn + preserve in extra)
-- [ ] Every verbatim column (Recommendation, defaults, photos, …) visible in the editor's "verbatim columns" sections
+- [x] Section count matches what you see in the export
+- [x] Item and comment counts match
+- [x] Comment order inside each item matches the export (spot-check 3 items, including one with Order values)
+- [x] Rich HTML comments render correctly (spot-check 3, including bold/lists/links) with no script/style/iframe execution
+- [x] Comment Type values from the real file map to info/limit/defect (or are reported as `unknown` in warnings — verify the count)
+- [x] Category values map to -1/0/1 (or warn + preserve in extra)
+- [x] Every verbatim column (Recommendation, defaults, photos, …) visible in the editor's "verbatim columns" sections
 
 ### Persistence + round-trip
-- [ ] Import commits; template appears in `/templates` with correct counts
-- [ ] Reload the editor — all edits and original content persist
-- [ ] Duplicate the template; mutate the copy; source unchanged
+- [x] Import commits; template appears in `/templates` with correct counts
+- [x] Reload the editor — all edits and original content persist
+- [x] Duplicate the template; mutate the copy; source unchanged
 
 ### Documentation update (after all boxes pass)
-- [ ] README.md "Real-export status" line updated
-- [ ] NOTES.md §11 updated with the validation date and file used
-- [ ] This file: status changed to CLOSED with date + evidence links
+- [x] README.md "Real-export status" line updated
+- [x] NOTES.md §11 updated with the validation date and file used
+- [x] This file: status changed to CLOSED with date + evidence links
 
 ## Failure handling
 

@@ -32,10 +32,11 @@ Comment text is stored **byte-for-byte** as exported (raw HTML included) and
 sanitized only at render time with a strict allowlist — scripts, styles,
 iframes and event handlers can never execute.
 
-> **Real-export status: NOT YET VALIDATED.** All automated tests use clearly
-> labeled *synthetic* format-conformance fixtures. The parser has never run
-> against a real Spectora export. See `tests/import-real-file.md` for the
-> checklist that must pass before that claim changes.
+> **Real-export status: VALIDATED 2026-09-16** against the real export in
+> `samples/spectora/` (InterNACHI Residential — evidence in the validation
+> summary there and in `tests/import-real-file.md`, now CLOSED). Automated
+> tests use clearly labeled *synthetic* format-conformance fixtures PLUS this
+> real-file gate.
 
 ## Tech stack
 
