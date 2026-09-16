@@ -1,5 +1,90 @@
 # NOTES — engineering decisions, gotchas, postmortems
 
+## 0. Assignment deliverables (read this first)
+
+### What we cut, and why (deliberate)
+
+- **No LLM-based import mapping.** The mapping from Spectora's HTML-text
+  export is fully documented and deterministic; a model would add a failure
+  mode (invented sections, dropped rows, malformed output) without solving a
+  real ambiguity. Deterministic parsing is verifiable; the assignment itself
+  flags model-validation risk.
+- **No user accounts / auth.** Out of scope by assignment; keeps the reviewer
+  workflow one URL open away. (If hosted publicly, the deployment is open —
+  acceptable for review purposes.)
+- **No create-from-scratch template authoring.** The customer arrives with a
+  tuned template; blank authoring does not serve that journey and two days
+  are better spent on fidelity and editor polish.
+- **No drag-and-drop reordering, no add/delete of sections/items in the
+  editor.** The baseline requires *rename/edit + save*; structural editing is
+  the first thing we would add next (schema already supports it — positions
+  are plain integers).
+- **No Binsr trial exploration.** Time went to the import fidelity gate and
+  the preservation report instead; the comparison was optional and we
+  documented the choice here rather than shipping a shallow one.
+- **No scheduled jobs, exports, analytics, or decorative UI** — all explicitly
+  out of scope.
+
+### Supported input
+
+- Exactly one format: Spectora **"Export to spreadsheet → Export HTML Text"**
+  `.xlsx` (legacy `.xls` accepted with a warning to prefer xlsx). Cap: 25 MB.
+- Required columns: `Section Name`, `Item Name`; all other documented columns
+  optional, unknown columns preserved verbatim.
+
+### Known limitations (honest list)
+
+- **Real-export validation is still OPEN.** Every automated test runs on
+  clearly-labeled *synthetic* format-conformance fixtures built from Spectora's
+  published format docs. No real Spectora export has been run through the app
+  yet — `tests/import-real-file.md` is the gate that must pass (and be
+  committed) before any "works on real exports" claim. **This is the single
+  biggest open risk**, and it is documented, not hidden.
+- HTML inside comments is preserved byte-for-byte and sanitized only at
+  render time with a strict allowlist. Embedded **iframes are not rendered**
+  (shown as a link placeholder — counted in the preservation report). This is
+  deliberate: no third-party frame execution inside the app.
+- Comment *type* values outside info/limit/defect are kept and flagged
+  `unknown` rather than coerced; same for non-numeric categories (kept in
+  `extra`, warning emitted).
+- A row that is not part of any section lands in a visible **"(Unfiled)"**
+  section (order-faithful) instead of being dropped.
+- The editor edits names, comment text, type, and category; it does not yet
+  create or delete nodes (see cuts above).
+
+### How we checked our work
+
+- **39 Vitest tests** (parser conformance: column reordering, missing/unknown
+  columns, messy headers, order semantics; service integration: transactional
+  commit, full-rollback sabotage test, duplicate independence proof).
+- `tsc --noEmit` clean; production build green; end-to-end API exercised on
+  the live app (preview → commit → tree → duplicate → delete).
+- The 15-point manual checklist in `tests/import-real-file.md` is the
+  pre-registered gate for real-export fidelity claims.
+- Postmortems below record what broke and how it was found (§1, §3, §5, §6).
+
+### Time spent
+
+Approximately **two focused days** of build time (assignment target was
+"two focused days, hackathon style"), including product exploration,
+parsing, persistence, editor/duplication, tests, and this documentation.
+Roughly: exploration + scaffolding ~20%, parser + validation ~30%,
+persistence + services ~20%, editor/duplication/dashboard ~20%,
+docs/tests/hardening ~10%.
+
+### Credits / what we built on
+
+- **Next.js 14 (App Router), React 18, Tailwind CSS** — app framework
+  (scaffolded with create-next-app; all app code is ours).
+- **Prisma 5** — ORM/migrations; schema designed by us (4 models, see
+  `.drytis/schema.md`).
+- **SheetJS (`xlsx`, 0.20.3 from the official SheetJS CDN)** — workbook
+  reading only; all parsing/grouping/reporting logic is ours
+  (`src/lib/spectora/`).
+- **sanitize-html** — battle-tested allowlist sanitizer for render time.
+- **Vitest** — test runner. Everything else (parser, services, UI) is
+  first-party code in this repo.
+
 ## 1. Embedded Postgres data corruption after container pause (postmortem)
 
 **Symptom:** the `postgres` background service failed to start with
