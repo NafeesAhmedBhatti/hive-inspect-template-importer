@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { listTemplates } from '@/lib/services/templateService';
 import { persistTemplate, ImportServiceError } from '@/lib/services/importService';
 import type { ImportReport, ImportWarning, ParsedTemplate } from '@/lib/spectora/types';
 
@@ -13,68 +13,11 @@ interface CommitBody {
   templateName?: string;
 }
 
-/** GET /api/templates — list templates with section/item/comment counts. */
+/** GET /api/templates — list templates with real section/item/comment counts. */
 export async function GET() {
   try {
-    const templates = await prisma.template.findMany({
-      orderBy: { updatedAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        source: true,
-        sourceFileName: true,
-        isSynthetic: true,
-        createdAt: true,
-        updatedAt: true,
-        _count: {
-          select: {
-            sections: {
-              // Prisma cannot nest counts two levels deep in _count; items and
-              // comments are summed via aggregate below for accuracy.
-            },
-          },
-        },
-      },
-    });
-
-    // Sum items + comments per template from grouped queries (accurate counts).
-    const sectionsByTemplate = await prisma.section.groupBy({
-      by: ['templateId'],
-      _count: { _all: true },
-    });
-    const itemsByTemplate = await prisma.item.groupBy({
-      by: ['templateId'],
-      _count: { _all: true },
-    });
-
-    const commentsByTemplate = await prisma.$queryRaw<{ templateid: string; count: bigint }[]>`
-      SELECT s."templateId" as templateid, COUNT(c.id) as count
-      FROM comments c
-      JOIN items i ON i.id = c."itemId"
-      JOIN sections s ON s.id = i."sectionId"
-      GROUP BY s."templateId"
-    `;
-
-    const sectionMap = new Map(sectionsByTemplate.map((r) => [r.templateId, r._count._all]));
-    const itemMap = new Map(itemsByTemplate.map((r) => [r.templateId, r._count._all]));
-    const commentMap = new Map(commentsByTemplate.map((r) => [r.templateid, Number(r.count)]));
-
-    return NextResponse.json({
-      templates: templates.map((t) => ({
-        id: t.id,
-        name: t.name,
-        source: t.source,
-        sourceFileName: t.sourceFileName,
-        isSynthetic: t.isSynthetic,
-        createdAt: t.createdAt,
-        updatedAt: t.updatedAt,
-        counts: {
-          sections: sectionMap.get(t.id) ?? 0,
-          items: itemMap.get(t.id) ?? 0,
-          comments: commentMap.get(t.id) ?? 0,
-        },
-      })),
-    });
+    const templates = await listTemplates();
+    return NextResponse.json({ templates });
   } catch (e) {
     console.error('[templates:list]', e);
     return NextResponse.json({ error: { code: 'LIST_FAILED', message: 'Could not load templates.' } }, { status: 500 });
