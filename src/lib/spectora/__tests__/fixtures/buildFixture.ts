@@ -11,6 +11,7 @@
  * entity-free HTML; real Excel-produced exports are unaffected.
  */
 import * as XLSX from 'xlsx';
+import { normalizeHeader } from '@/lib/spectora/columns';
 
 export interface FixtureRow {
   'Section Name'?: string;
@@ -40,9 +41,23 @@ function unionHeaders(rows: FixtureRow[]): string[] {
 
 export function buildWorkbookBytes(rows: FixtureRow[], headerOrder?: string[]): Uint8Array {
   const headers = headerOrder ?? unionHeaders(rows);
+  // Map each canonical key to the header cell it should be written under:
+  // custom headerOrder cells are matched to canonical keys via normalizeHeader
+  // (the same matcher the parser uses), so "messy" header fixtures still
+  // carry their values under the right column.
+  const keyForHeader = new Map<string, string>();
+  const canonicalKeys = new Set<string>();
+  for (const row of rows) for (const k of Object.keys(row)) canonicalKeys.add(k);
+  for (const k of canonicalKeys) keyForHeader.set(normalizeHeader(k), k);
+
   const aoa: string[][] = [headers];
   for (const row of rows) {
-    aoa.push(headers.map((h) => row[h] ?? ''));
+    aoa.push(
+      headers.map((h) => {
+        const key = keyForHeader.get(normalizeHeader(h));
+        return (key ? row[key] : undefined) ?? '';
+      })
+    );
   }
   const sheet = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();

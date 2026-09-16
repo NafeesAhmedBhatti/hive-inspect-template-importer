@@ -58,9 +58,19 @@ export function isCanonicalColumn(column: string): boolean {
   return CANONICAL_COLUMNS.includes(column);
 }
 
-/** Normalize a header cell for case/whitespace-insensitive matching. */
+/**
+ * Normalize a header cell the way Spectora/Excel exports vary in the wild:
+ * strip BOM, convert newlines (CRLF/LF) and runs of whitespace to single
+ * spaces, collapse unicode spaces, trim — matching is then case-insensitive.
+ */
 export function normalizeHeader(raw: string): string {
-  return raw.replace(/\uFEFF/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return raw
+    .replace(/\uFEFF/g, '')
+    .replace(/\r\n?[\u00A0 ]?/g, ' ')
+    .replace(/[\u00A0\u2000-\u200B]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 export interface HeaderMatch {

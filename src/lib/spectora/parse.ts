@@ -164,9 +164,14 @@ export function parse(
     }
 
     // ---- Item run -----------------------------------------------------------
+    // NOTE: a re-appearing item name ALWAYS starts a new item (order-faithful),
+    // but when it is *contiguous* (the previous item in this section has the
+    // same name) the two runs are one logical item per the grouping rule.
     if (itemName !== '' && (!currentItem || currentItem.name !== itemName)) {
       const key = `${sections.indexOf(currentSection!)}|${itemName}`;
-      if (firstItemAt.has(key) && currentSection!.items[firstItemAt.get(key)!] !== undefined && currentSection!.items[firstItemAt.get(key)!] !== currentItem) {
+      const previousInThisSection = currentSection!.items[currentSection!.items.length - 1];
+      const isContiguous = previousInThisSection !== undefined && previousInThisSection.name === itemName;
+      if (firstItemAt.has(key) && !isContiguous) {
         warnings.push({
           level: 'info',
           code: 'NONCONTIGUOUS_ITEM',
