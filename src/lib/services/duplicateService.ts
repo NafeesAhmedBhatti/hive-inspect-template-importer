@@ -78,7 +78,7 @@ export async function duplicateTemplate(
       }
 
       return { id: copy.id, name: copy.name };
-    });
+    }, { maxWait: 10_000, timeout: 60_000 }); // serverless pooler: many round-trips per copy
   } catch (e) {
     if (e instanceof DuplicateError) throw e;
     throw new DuplicateError('DUPLICATE_FAILED', `Could not duplicate the template: ${e instanceof Error ? e.message : 'unknown error'} — nothing was committed.`);

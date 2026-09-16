@@ -43,7 +43,12 @@ export async function persistTemplate(input: PersistInput): Promise<{ id: string
   }
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    // Serverless DBs (Supabase transaction pooler via PgBouncer) need a longer
+    // interactive-transaction window: ~480 sequential INSERTs for a real
+    // InterNACHI export at ~200ms+ round-trip each. 60s (default 5s) covers it
+    // within Vercel's function limits; maxWait guards pool acquisition.
+    return await prisma.$transaction(
+      async (tx) => {
       const created = await tx.template.create({
         data: {
           name,
@@ -98,7 +103,7 @@ export async function persistTemplate(input: PersistInput): Promise<{ id: string
       }
 
       return { id: created.id, name: created.name };
-    });
+    }, { maxWait: 10_000, timeout: 60_000 });
   } catch (e) {
     if (e instanceof ImportServiceError) throw e;
     throw new ImportServiceError(
