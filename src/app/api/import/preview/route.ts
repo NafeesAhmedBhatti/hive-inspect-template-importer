@@ -5,7 +5,8 @@ import { MAX_UPLOAD_BYTES } from '@/lib/spectora/readWorkbook';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 // Preview parses and reports but NEVER persists — the DB is untouched here.
-export const maxDuration = 60;
+// 300s (Hobby-pro capped) for the pooler's slow per-statement round-trips.
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   let form: FormData;

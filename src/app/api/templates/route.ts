@@ -5,6 +5,9 @@ import type { ImportReport, ImportWarning, ParsedTemplate } from '@/lib/spectora
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Commit runs an interactive transaction (~480 INSERTs on a real export);
+// serverless poolers need a long window — align with vercel.json.
+export const maxDuration = 300;
 
 interface CommitBody {
   template: ParsedTemplate;

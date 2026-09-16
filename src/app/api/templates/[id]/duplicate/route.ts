@@ -3,6 +3,9 @@ import { duplicateTemplate, DuplicateError } from '@/lib/services/duplicateServi
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// Deep copy of a real export = hundreds of INSERTs in one transaction; allow
+// the same long window as commit (serverless pooler round-trips).
+export const maxDuration = 300;
 
 /** POST /api/templates/[id]/duplicate — transactional deep copy. */
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
