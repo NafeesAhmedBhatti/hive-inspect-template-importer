@@ -3,14 +3,19 @@
 Import Spectora "Export to spreadsheet → **Export HTML Text**" `.xlsx` files
 into a structured, editable, persistent template library.
 
+> **🔴 Live demo:** https://hive-inspect-template-importer-two.vercel.app/
+> (deployed on Vercel + Supabase Postgres; opens with the real imported
+> InterNACHI Residential template — 13 sections / 69 items / 392 comments)
+
 ## What it does
 
 1. **Upload** a Spectora HTML-text spreadsheet export (`.xlsx`).
 2. **Preview** — the file is parsed server-side and you get a full preview:
    section/item/comment counts, a **preservation report** for every column,
    and row-level warnings. *Nothing is saved yet.*
-3. **Import** — on confirm, the whole template commits in a single database
-   transaction (all-or-nothing).
+3. **Import** — on confirm, the whole template commits transactionally
+   (chunked per section on serverless databases, with a compensating delete
+   on failure — all-or-nothing semantics preserved).
 4. **Library** — browse templates with real counts and provenance, duplicate
    any template into an independent deep copy, or delete it.
 5. **Edit** — open a template to edit section/item/comment names, comment
@@ -99,7 +104,7 @@ tests/import-real-file.md         # the real-export validation gate
 | --- | --- | --- |
 | POST | `/api/import/preview` | multipart `.xlsx` → parse → IR + report + warnings (**no persistence**) |
 | GET | `/api/templates` | list with real section/item/comment counts |
-| POST | `/api/templates` | commit a parsed IR in ONE transaction |
+| POST | `/api/templates` | commit a parsed IR transactionally (chunked, all-or-nothing) |
 | GET | `/api/templates/[id]` | full ordered tree |
 | PATCH | `/api/templates/[id]` | rename |
 | DELETE | `/api/templates/[id]` | delete (cascade) |
@@ -122,13 +127,19 @@ Parser tests cover: column reordering, missing/unknown columns, rich HTML
 preservation, encounter-order positions, non-contiguous sections/items,
 "(Unfiled)" items, empty-comment row warnings, `Order (w/i item)` stable
 sorting, messy headers (BOM/CRLF/case/whitespace), and actionable hard
-errors. Service tests prove transactional commit, full rollback, and
-duplicate independence (mutate the copy → source unchanged).
+errors. Service tests prove transactional commit, all-or-nothing failure
+handling (compensating delete across chunks), and duplicate independence
+(mutate the copy → source unchanged).
 
 ## Deployment
 
+Deployed: **https://hive-inspect-template-importer-two.vercel.app/**
+
 See `docs/deploy-vercel.md` for Vercel + Supabase. Environment variables:
 
-- `DATABASE_URL` — Postgres connection (Supabase: **pooled**, port 6543)
-- `DIRECT_URL` — migrations connection (Supabase: **direct**, port 5432)
+- `DATABASE_URL` — Supabase **transaction pooler**, port 6543, with
+  `?pgbouncer=true&connection_limit=5&pool_timeout=30` (serverless: `=1`
+  times out under concurrent requests)
+- `DIRECT_URL` — migrations connection (Supabase **direct**,
+  `db.<project-ref>.supabase.co:5432`; IPv6-only on the free plan)
 - `.env.example` documents both.
