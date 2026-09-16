@@ -13,6 +13,29 @@ export function TemplatesTable({ templates }: { templates: TemplateListItem[] })
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  async function handleDuplicate(t: TemplateListItem) {
+    setBusyId(t.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/templates/${t.id}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) {
+        const json = await jsonSafe(res);
+        setError(json?.error?.message ?? `Duplicate failed (HTTP ${res.status})`);
+        setBusyId(null);
+        return;
+      }
+      setBusyId(null);
+      startTransition(() => router.refresh());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Duplicate failed');
+      setBusyId(null);
+    }
+  }
+
   async function handleDeleteConfirmed() {
     if (!deleting) return;
     setBusyId(deleting.id);
@@ -85,6 +108,14 @@ export function TemplatesTable({ templates }: { templates: TemplateListItem[] })
                     >
                       Open
                     </Link>
+                    <button
+                      onClick={() => handleDuplicate(t)}
+                      disabled={busyId === t.id}
+                      className="rounded px-2 py-1 text-xs font-medium text-hive-600 hover:bg-hive-50 hover:text-hive-700 disabled:opacity-50"
+                      data-testid={`template-duplicate-${t.id}`}
+                    >
+                      {busyId === t.id ? '…' : 'Duplicate'}
+                    </button>
                     <button
                       onClick={() => setDeleting(t)}
                       disabled={busyId === t.id}
